@@ -22,6 +22,10 @@ Mat resultingImage;
 vector<Rect> subRegions;
 vector<Mat> subImages;
 
+string imageFilename;
+string outputFile;
+string fileCoord;
+
 // Canny parameters
 int kernelSize      = 3;
 int edgeThreshold   = 1;
@@ -37,6 +41,8 @@ int radiusPadding;
 int dWidth;
 int dHeight;
 
+int scaleTargetWidth;
+
 vector<vector<Point> > contours;
 vector<Vec4i> hierarchy;
 
@@ -47,7 +53,60 @@ void help() {
   cout << "edge-detector [config.json] [imageFile]" << endl;
 }
 
+void saveCoordinates(string filename) {
+  json j = {};
+
+  vector<json> coordinates;
+  for(int i = 0; i < subRegions.size(); i++) {
+    json subR = {};
+    subR["tl_x"]  = subRegions.at(i).x;
+    subR["tl_y"]  = subRegions.at(i).y;
+    subR["br_x"]  = subRegions.at(i).x + subRegions.at(i).width;
+    subR["br_y"]  = subRegions.at(i).y + subRegions.at(i).height;
+
+    coordinates.push_back(subR);
+  }
+
+  j["filename"]     = imageFilename;
+  j["coordinates"]  = coordinates;
+
+  std::ofstream o(filename);
+  o << std::setw(4) << j << endl;
+}
+
+// Source: https://stackoverflow.com/questions/28562401/resize-an-image-to-a-square-but-keep-aspect-ratio-c-opencv
+cv::Mat getSquareImage( const cv::Mat& img, int target_width = 500 )
+{
+  int width   = img.cols,
+  height  = img.rows;
+
+  cv::Mat square = cv::Mat::zeros( target_width, target_width, img.type() );
+
+  int max_dim = ( width >= height ) ? width : height;
+  float scale = ( ( float ) target_width ) / max_dim;
+
+  cv::Rect roi;
+
+  if(width >= height) {
+    roi.width = target_width;
+    roi.x = 0;
+    roi.height = height * scale;
+    roi.y = ( target_width - roi.height ) / 2;
+  } else {
+    roi.y = 0;
+    roi.height = target_width;
+    roi.width = width * scale;
+    roi.x = ( target_width - roi.width ) / 2;
+  }
+
+  cv::resize( img, square( roi ), roi.size() );
+
+  return square;
+}
+
+
 void cannyThreshold(int, void*) {
+  cout << "Initializing cannyThreshold with min: " << lowThreshold << " and max: " << lowThreshold * 3 << endl;
   blur(image, edgeImage, Size(3, 3));
   Canny(edgeImage, edgeImage, lowThreshold, lowThreshold * 3, kernelSize);
 
@@ -100,9 +159,8 @@ void cannyThreshold(int, void*) {
     }
   }
 
-  //cout << subRegions.size() << " objects found." << endl;
-
-  imshow("Display", drawing);
+  imwrite(outputFile, drawing);
+  imshow("Display", getSquareImage(drawing, scaleTargetWidth));
 }
 
 int main(int argc, char **argv) {
@@ -113,10 +171,14 @@ int main(int argc, char **argv) {
 
   auto configJson = json::parse(str);
 
-  width         = configJson["width"];
-  height        = configJson["height"];
-  radiusPadding = configJson["radiusPadding"];
+  width             = configJson["width"];
+  height            = configJson["height"];
+  radiusPadding     = configJson["radiusPadding"];
+  scaleTargetWidth  = configJson["scaleTargetWidth"];
+  outputFile        = configJson["outputFile"];
+  fileCoord         = configJson["fileCoord"];
 
+  imageFilename = argv[2];
   image = imread(argv[2]);
   image.copyTo(originalImage);
   image.copyTo(edgeImage);
@@ -127,11 +189,13 @@ int main(int argc, char **argv) {
   cout << "Width: " << dWidth << " Height: " << dHeight << endl;
 
   namedWindow("Display");
-  imshow("Display", originalImage);
+  imshow("Display", getSquareImage(originalImage, scaleTargetWidth));
 
   createTrackbar("Min threshold", "Display", &lowThreshold, maxThreshold, cannyThreshold);
 
   waitKey(0);
+
+  saveCoordinates(fileCoord);
 
   return 0;
 }

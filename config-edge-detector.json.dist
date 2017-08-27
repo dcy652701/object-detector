@@ -1,5 +1,9 @@
 {
   "width": 50,
   "height": 50,
-  "radiusPadding": 5
+  "radiusPadding": 5,
+  "cannyMinThreshold": 25,
+  "scaleTargetWidth": 800,
+  "fileCoord": "coordinates.json",
+  "outputFile": "output.jpg"
 }
